@@ -57,6 +57,7 @@ type queueAttr struct {
 	queueID   api.QueueID
 	name      string
 	share     float64
+	isValid   bool
 	ancestors []api.QueueID
 	children  map[api.QueueID]*queueAttr
 
@@ -156,7 +157,12 @@ func (cp *capacityPlugin) OnSessionOpen(ssn *framework.Session) {
 			klog.V(3).Infof("Queue <%s> current state: %s, is not open state, can not reclaim for <%s>.", queue.Name, queue.Queue.Status.State, task.Name)
 			return false
 		}
+
 		attr := cp.queueOpts[queue.UID]
+		if !attr.isValid {
+			klog.V(3).Infof("Queue <%s> is not valid, can not reclaim for <%s>.", queue.Name, task.Name)
+			return false
+		}
 
 		futureUsed := attr.allocated.Clone().Add(task.Resreq)
 		overused := !futureUsed.LessEqualWithDimension(attr.deserved, task.Resreq)
@@ -174,6 +180,10 @@ func (cp *capacityPlugin) OnSessionOpen(ssn *framework.Session) {
 	ssn.AddAllocatableFn(cp.Name(), func(queue *api.QueueInfo, candidate *api.TaskInfo) bool {
 		if queue.Queue.Status.State != scheduling.QueueStateOpen {
 			klog.V(3).Infof("Queue <%s> current state: %s, cannot allocate task <%s>.", queue.Name, queue.Queue.Status.State, candidate.Name)
+			return false
+		}
+		if !cp.queueOpts[queue.UID].isValid {
+			klog.V(3).Infof("Queue <%s> is invalid, can not allocate task <%s>.", queue.Name, candidate.Name)
 			return false
 		}
 		if !readyToSchedule {
@@ -783,6 +793,10 @@ func (cp *capacityPlugin) updateAncestors(queue *api.QueueInfo, ssn *framework.S
 	cp.queueOpts[parentInfo.UID].children[queue.UID] = cp.queueOpts[queue.UID]
 	cp.queueOpts[queue.UID].ancestors = append(cp.queueOpts[parentInfo.UID].ancestors, parentInfo.UID)
 	return nil
+}
+
+func (cp *capacityPlugin) checkQueue(attr *queueAttr) error {
+
 }
 
 func (cp *capacityPlugin) checkHierarchicalQueue(attr *queueAttr) error {

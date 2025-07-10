@@ -72,13 +72,19 @@ func calculateWeight(args framework.Arguments) ResourceStrategyFit {
 	     - name: resource-strategy-fit
 	        arguments:
 	          resourceStrategyFitWeight: 10
-	          resources:
+	          resources: nvidia.com/gpu, cpu
+	          resourcesStrategy:
 	            nvidia.com/gpu:
 	              type: MostAllocated
 	              weight: 2
 	            cpu:
 	              type: LeastAllocated
 	              weight: 1
+			  sraPolicy: retention
+			  sraWeight: 10
+	          sra.proportional.nvidia.com/gpu.cpu: 4
+              sra.proportional.nvidia.com/gpu.memory: 8
+			  sra.retention.resources.nvidia.com/gpu: 1
 	*/
 
 	var weight ResourceStrategyFit

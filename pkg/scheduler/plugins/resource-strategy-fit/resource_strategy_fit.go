@@ -31,8 +31,25 @@ import (
 
 const (
 	// PluginName indicates name of volcano scheduler plugin.
-	PluginName                             = "resource-strategy-fit"
+	PluginName = "resource-strategy-fit"
+	// DefaultResourceStrategyFitPluginWeight is the default weight of resourceStrategyFit plugin
 	DefaultResourceStrategyFitPluginWeight = 10
+	// Resource is the key for additional resource key name
+	Resource = "resources"
+	// ProportionalPredicate is the key for enabling Proportional Predicate in YAML
+	ProportionalPredicate = "predicate.ProportionalEnable"
+	// ProportionalResourcesPrefix is the key prefix for proportional resource key name
+	ProportionalResourcesPrefix = Resource + "."
+	// SraEnable is the key for enabling Sra Predicate in YAML
+	SraEnable = "predicate.sraEnable"
+	// SraRetentionWeight is the key for providing retention policy Weight in YAML
+	SraRetentionWeight = "sra.retention.weight"
+	// SraRetentionResource is the key for retention resource key name
+	SraRetentionResource = "sra.retention"
+	// SraRetentionResourcesPrefix is the key prefix for retention resource key name
+	SraRetentionResourcesPrefix = SraRetentionResource + "."
+	// resourceFmt is the format for resource key
+	resourceFmt = "%s[%d]"
 )
 
 type ResourceStrategyFit struct {
@@ -66,25 +83,25 @@ func New(arguments framework.Arguments) framework.Plugin {
 
 func calculateWeight(args framework.Arguments) ResourceStrategyFit {
 	/*
-	   actions: "enqueue, allocate, backfill, reclaim, preempt"
-	   tiers:
-	   - plugins:
-	     - name: resource-strategy-fit
-	        arguments:
-	          resourceStrategyFitWeight: 10
-	          resources: nvidia.com/gpu, cpu
-	          resourcesStrategy:
-	            nvidia.com/gpu:
-	              type: MostAllocated
-	              weight: 2
-	            cpu:
-	              type: LeastAllocated
-	              weight: 1
-			  sraPolicy: retention
-			  sraWeight: 10
-	          sra.proportional.nvidia.com/gpu.cpu: 4
-              sra.proportional.nvidia.com/gpu.memory: 8
-			  sra.retention.resources.nvidia.com/gpu: 1
+		actions: "enqueue, allocate, backfill, reclaim, preempt"
+		tiers:
+		- plugins:
+		  - name: resource-strategy-fit
+		     arguments:
+		       resourceStrategyFitWeight: 10
+		       resources:
+		         nvidia.com/gpu:
+		           type: MostAllocated
+		           weight: 2
+		         cpu:
+		           type: LeastAllocated
+		           weight: 1
+		       sraPolicy: retention
+		       sra.resources: nvidia.com/gpu
+		       sra.retention.weight: 10
+		       sra.retention.nvidia.com/gpu: 1
+		       sra.proportional.nvidia.com/gpu.cpu: 4
+		       sra.proportional.nvidia.com/gpu.memory: 8
 	*/
 
 	var weight ResourceStrategyFit

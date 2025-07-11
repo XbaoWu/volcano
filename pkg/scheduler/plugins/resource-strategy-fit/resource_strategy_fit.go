@@ -34,12 +34,12 @@ const (
 	PluginName = "resource-strategy-fit"
 	// DefaultResourceStrategyFitPluginWeight is the default weight of resourceStrategyFit plugin
 	DefaultResourceStrategyFitPluginWeight = 10
-	// Resource is the key for additional resource key name
-	Resource = "resources"
+	// SraResource is the key for additional resource key name
+	SraResource = "sra.resources"
 	// ProportionalPredicate is the key for enabling Proportional Predicate in YAML
-	ProportionalPredicate = "predicate.ProportionalEnable"
-	// ProportionalResourcesPrefix is the key prefix for proportional resource key name
-	ProportionalResourcesPrefix = Resource + "."
+	ProportionalPredicate = "sra.proportional"
+	// SraProportionalResourcesPrefix is the key prefix for proportional resource key name
+	SraProportionalResourcesPrefix = "sra.proportional."
 	// SraEnable is the key for enabling Sra Predicate in YAML
 	SraEnable = "predicate.sraEnable"
 	// SraRetentionWeight is the key for providing retention policy Weight in YAML
@@ -47,7 +47,7 @@ const (
 	// SraRetentionResource is the key for retention resource key name
 	SraRetentionResource = "sra.retention"
 	// SraRetentionResourcesPrefix is the key prefix for retention resource key name
-	SraRetentionResourcesPrefix = SraRetentionResource + "."
+	SraRetentionResourcesPrefix = "sra.retention."
 	// resourceFmt is the format for resource key
 	resourceFmt = "%s[%d]"
 )
@@ -73,12 +73,18 @@ func (w *ResourceStrategyFit) String() string {
 type resourceStrategyFitPlugin struct {
 	// Arguments given for the plugin
 	weight ResourceStrategyFit
+	// Policy for sra
+	sraPolicy    string
+	retention    retentionWeight
+	proportional map[v1.ResourceName]baseResource
 }
 
 // New function returns prioritizePlugin object
 func New(arguments framework.Arguments) framework.Plugin {
 	weight := calculateWeight(arguments)
-	return &resourceStrategyFitPlugin{weight: weight}
+	rsf := resourceStrategyFitPlugin{weight: weight}
+	rsf.applySraPolicy()
+	return &rsf
 }
 
 func calculateWeight(args framework.Arguments) ResourceStrategyFit {
@@ -137,6 +143,10 @@ func calculateWeight(args framework.Arguments) ResourceStrategyFit {
 	}
 	weight.Resources = resources
 	return weight
+}
+
+func (rsf *resourceStrategyFitPlugin) applySraPolicy() {
+
 }
 
 func (rsf *resourceStrategyFitPlugin) Name() string {

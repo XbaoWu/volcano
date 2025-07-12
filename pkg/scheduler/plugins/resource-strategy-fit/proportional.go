@@ -18,6 +18,8 @@ package resourcestrategyfit
 
 import (
 	"fmt"
+	"strings"
+	"volcano.sh/volcano/pkg/scheduler/framework"
 
 	v1 "k8s.io/api/core/v1"
 
@@ -32,6 +34,37 @@ const (
 type baseResource struct {
 	CPU    float64
 	Memory float64
+}
+
+func calculateProportionalResources(resources []string, args framework.Arguments) map[v1.ResourceName]baseResource {
+	resourcesProportional := make(map[v1.ResourceName]baseResource)
+
+	for _, resource := range resources {
+		resource = strings.TrimSpace(resource)
+		if resource == "" {
+			continue
+		}
+		// proportional.resources.[ResourceName]
+		cpuResourceKey := SraProportionalResourcesPrefix + resource + ".cpu"
+		cpuResourceRate := 1.0
+		args.GetFloat64(&cpuResourceRate, cpuResourceKey)
+		if cpuResourceRate < 0 {
+			cpuResourceRate = 1.0
+		}
+		memoryResourceKey := SraProportionalResourcesPrefix + resource + ".memory"
+		memoryResourceRate := 1.0
+		args.GetFloat64(&memoryResourceRate, memoryResourceKey)
+		if memoryResourceRate < 0 {
+			memoryResourceRate = 1.0
+		}
+		r := baseResource{
+			CPU:    cpuResourceRate,
+			Memory: memoryResourceRate,
+		}
+		resourcesProportional[v1.ResourceName(resource)] = r
+	}
+
+	return resourcesProportional
 }
 
 // checkNodeResourceIsProportional checks if a gpu:cpu:memory is Proportional

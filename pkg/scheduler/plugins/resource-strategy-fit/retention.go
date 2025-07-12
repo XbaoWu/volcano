@@ -94,11 +94,11 @@ func calculateRetentionWeight(resources []string, args framework.Arguments) rete
 	return weight
 }
 
-// SraScore use the best fit polices during scheduling.
+// retentionScore use the best fit polices during scheduling.
 // Goals:
-// - Schedule Tasks using BestFit Policy using sra (scarce resource avoidance) strategy
+// - Schedule Tasks using BestFit Policy using retention policy
 // - Improve the utilization of scarce resources on the cluster
-func sraScore(task *api.TaskInfo, node *api.NodeInfo, sra retentionWeight) float64 {
+func retentionScore(task *api.TaskInfo, node *api.NodeInfo, retention retentionWeight) float64 {
 	requested := task.Resreq
 	capacity := node.Capacity
 
@@ -108,13 +108,13 @@ func sraScore(task *api.TaskInfo, node *api.NodeInfo, sra retentionWeight) float
 
 		if resourceCapacity == 0 {
 			// node resources can't meet the task request, so it can be disregarded.
-			klog.V(4).Infof("task %s/%s cannot sra node %s, because node capacity: %v , task need: %v",
+			klog.V(4).Infof("task %s/%s doesn't need to consider node %s, because node capacity: %v , task need: %v",
 				task.Namespace, task.Name, node.Name, capacity, requested)
 			return 0
 		}
 	}
 
-	score, err := ResourceSraScore(sra.Resources, capacity)
+	score, err := resourceRetentionScore(retention.Resources, capacity)
 	if err != nil {
 		klog.V(4).Infof("task %s/%s cannot sra node %s, node capacity: %v , task need: %v , error: %s",
 			task.Namespace, task.Name, node.Name, capacity, requested, err.Error())
@@ -124,20 +124,20 @@ func sraScore(task *api.TaskInfo, node *api.NodeInfo, sra retentionWeight) float
 		task.Namespace, task.Name, node.Name, capacity, requested, score)
 
 	// mapping the result from [0, weightSum] to [0, MaxNodeScore]
-	if sra.ResourcesWeightSum > 0 {
-		score /= float64(sra.ResourcesWeightSum)
+	if retention.ResourcesWeightSum > 0 {
+		score /= float64(retention.ResourcesWeightSum)
 		score = 1.0 - score
 	}
-	score *= float64(k8sFramework.MaxNodeScore * int64(sra.Weight))
+	score *= float64(k8sFramework.MaxNodeScore * int64(retention.Weight))
 
 	return score
 }
 
-// ResourceSraScore calculate the sra score for resource with provided info
-func ResourceSraScore(sraResources map[v1.ResourceName]int, capacity *api.Resource) (float64, error) {
+// resourceRetentionScore calculate the retention score for resource with provided info
+func resourceRetentionScore(resources map[v1.ResourceName]int, capacity *api.Resource) (float64, error) {
 	score := 0.0
 
-	for resource, weight := range sraResources {
+	for resource, weight := range resources {
 		resourceCapacity := capacity.Get(resource)
 
 		if resourceCapacity > 0 {

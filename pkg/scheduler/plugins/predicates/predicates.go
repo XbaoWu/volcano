@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"maps"
 	"slices"
-	"strings"
 	"sync"
 
 	v1 "k8s.io/api/core/v1"
@@ -83,13 +82,6 @@ const (
 
 	// CachePredicate control cache predicate feature
 	CachePredicate = "predicate.CacheEnable"
-
-	// ProportionalPredicate is the key for enabling Proportional Predicate in YAML
-	ProportionalPredicate = "predicate.ProportionalEnable"
-	// ProportionalResource is the key for additional resource key name
-	ProportionalResource = "predicate.resources"
-	// ProportionalResourcesPrefix is the key prefix for additional resource key name
-	ProportionalResourcesPrefix = ProportionalResource + "."
 )
 
 var (
@@ -115,11 +107,6 @@ func (pp *predicatesPlugin) Name() string {
 	return PluginName
 }
 
-type baseResource struct {
-	CPU    float64
-	Memory float64
-}
-
 type predicateEnable struct {
 	nodeAffinityEnable              bool
 	nodePortEnable                  bool
@@ -129,10 +116,8 @@ type predicateEnable struct {
 	volumeZoneEnable                bool
 	podTopologySpreadEnable         bool
 	cacheEnable                     bool
-	proportionalEnable              bool
 	volumeBindingEnable             bool
 	dynamicResourceAllocationEnable bool
-	proportional                    map[v1.ResourceName]baseResource
 }
 
 // bind context extension information of predicates
@@ -165,10 +150,6 @@ func enablePredicate(args framework.Arguments) predicateEnable {
 	         predicate.GPUSharingEnable: true
 	         predicate.GPUNumberEnable: true
 	         predicate.CacheEnable: true
-	         predicate.ProportionalEnable: true
-	         predicate.resources: nvidia.com/gpu
-	         predicate.resources.nvidia.com/gpu.cpu: 4
-	         predicate.resources.nvidia.com/gpu.memory: 8
 	     - name: proportion
 	     - name: nodeorder
 	*/
@@ -182,7 +163,6 @@ func enablePredicate(args framework.Arguments) predicateEnable {
 		volumeZoneEnable:                true,
 		podTopologySpreadEnable:         true,
 		cacheEnable:                     false,
-		proportionalEnable:              false,
 		volumeBindingEnable:             true,
 		dynamicResourceAllocationEnable: false,
 	}
@@ -198,41 +178,7 @@ func enablePredicate(args framework.Arguments) predicateEnable {
 	args.GetBool(&predicate.podTopologySpreadEnable, PodTopologySpreadEnable)
 	args.GetBool(&predicate.volumeBindingEnable, VolumeBindingEnable)
 	args.GetBool(&predicate.dynamicResourceAllocationEnable, DynamicResourceAllocationEnable)
-
 	args.GetBool(&predicate.cacheEnable, CachePredicate)
-	// Checks whether predicate.ProportionalEnable is provided or not, if given, modifies the value in predicateEnable struct.
-	args.GetBool(&predicate.proportionalEnable, ProportionalPredicate)
-	resourcesProportional := make(map[v1.ResourceName]baseResource)
-	resourcesStr, ok := args[ProportionalResource].(string)
-	if !ok {
-		resourcesStr = ""
-	}
-	resources := strings.Split(resourcesStr, ",")
-	for _, resource := range resources {
-		resource = strings.TrimSpace(resource)
-		if resource == "" {
-			continue
-		}
-		// proportional.resources.[ResourceName]
-		cpuResourceKey := ProportionalResourcesPrefix + resource + ".cpu"
-		cpuResourceRate := 1.0
-		args.GetFloat64(&cpuResourceRate, cpuResourceKey)
-		if cpuResourceRate < 0 {
-			cpuResourceRate = 1.0
-		}
-		memoryResourceKey := ProportionalResourcesPrefix + resource + ".memory"
-		memoryResourceRate := 1.0
-		args.GetFloat64(&memoryResourceRate, memoryResourceKey)
-		if memoryResourceRate < 0 {
-			memoryResourceRate = 1.0
-		}
-		r := baseResource{
-			CPU:    cpuResourceRate,
-			Memory: memoryResourceRate,
-		}
-		resourcesProportional[v1.ResourceName(resource)] = r
-	}
-	predicate.proportional = resourcesProportional
 
 	return predicate
 }
@@ -634,19 +580,6 @@ func (pp *predicatesPlugin) OnSessionOpen(ssn *framework.Session) {
 					}
 				}
 			}
-		}
-
-		if predicate.proportionalEnable {
-			// Check ProportionalPredicate
-			proportionalStatus, _ := checkNodeResourceIsProportional(task, node, predicate.proportional)
-			if proportionalStatus.Code != api.Success {
-				predicateStatus = append(predicateStatus, proportionalStatus)
-				if ShouldAbort(proportionalStatus) {
-					return api.NewFitErrWithStatus(task, node, predicateStatus...)
-				}
-			}
-			klog.V(4).Infof("checkNodeResourceIsProportional predicates Task <%s/%s> on Node <%s>: fit %v",
-				task.Namespace, task.Name, node.Name, fit)
 		}
 
 		// Check VolumeBinding

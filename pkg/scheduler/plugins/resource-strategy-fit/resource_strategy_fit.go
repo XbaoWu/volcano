@@ -110,7 +110,7 @@ func calculateWeight(args framework.Arguments) ResourceStrategyFit {
 	var weight ResourceStrategyFit
 
 	resourceStrategyFitPluginWeight, b := framework.Get[int](args, "resourceStrategyFitWeight")
-	if !b || resourceStrategyFitPluginWeight <= 0 {
+	if !b || resourceStrategyFitPluginWeight < 0 {
 		resourceStrategyFitPluginWeight = DefaultResourceStrategyFitPluginWeight
 	}
 	weight.ResourceStrategyFitWeight = resourceStrategyFitPluginWeight

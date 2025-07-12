@@ -1,4 +1,4 @@
-package predicates
+package resourcestrategyfit
 
 import (
 	"testing"

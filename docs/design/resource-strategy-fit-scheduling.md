@@ -18,7 +18,7 @@ The native k8s ResourceStrategyFit plug-in can only adopt one type of strategy f
 
 ## Proposal
 
-Extend one plug-ins to meet the above needs
+Extend one plug-in to meet the above needs
 
 - ResourceStrategyFit
 
@@ -32,20 +32,20 @@ Extend one plug-ins to meet the above needs
 ### ResourceStrategyFit
 
 config：
-```
-actions: "enqueue, allocate, backfill, reclaim, preempt"
-tiers:
-- plugins:
- - name: resource-strategy-fit
-    arguments:
-      resourceStrategyFitWeight: 10
-      resources:
-        nvidia.com/gpu:
-          type: MostAllocated
-          weight: 2
-        cpu:
-          type: LeastAllocated
-          weight: 1
+```yaml
+  actions: "enqueue, allocate, backfill, reclaim, preempt"
+  tiers:
+  - plugins:
+    - name: resource-strategy-fit
+      arguments:
+        resourceStrategyFitWeight: 10
+        resources:
+          nvidia.com/gpu:
+            type: MostAllocated
+            weight: 2
+          cpu:
+            type: LeastAllocated
+            weight: 1
 ```
 config description：
 
@@ -76,3 +76,27 @@ finalScoreNode = [(weight1 * resource1) + (weight2 * resource2) + … + (weightN
 
 ### Binpack VS ResourceStrategyFit
 If you want to use the clustering strategy for all resource types, you can choose the Binpack plugin. If you need to configure different clustering or scattering strategies for different resource types, you can choose the ResourceStrategyFit plugin. ResourceStrategyFit can also achieve the same results as Binpack by adjusting configuration parameters.
+
+## Best Practices
+### AI scenario
+In some AI scenarios, CPU tasks are usually dispersed into CPU machine groups to reduce hot spots. GPU tasks are gathered in the GPU machine group to reduce GPU fragmentation. At the same time, it is also necessary to avoid the situation that CPU tasks are assigned to GPU nodes, resulting in long-term waiting of GPU tasks due to insufficient CPU or MEM resources of nodes. In this scenario, we can combine **resourceStrategyFit** and **sra policy** to deal with this scenario. The corresponding example configuration is as follows:
+
+```yaml
+  actions: "enqueue, allocate, backfill, reclaim, preempt"
+  tiers:
+    - plugins:
+      - name: resource-strategy-fit
+        arguments:
+          resourceStrategyFitWeight: 10
+          resources:
+            nvidia.com/gpu:
+              type: MostAllocated
+              weight: 2
+            cpu:
+              type: LeastAllocated
+              weight: 1
+          sra.policy: retention
+          sra.resources: nvidia.com/gpu
+          sra.retention.weight: 10
+          sra.retention.nvidia.com/gpu: 1
+```

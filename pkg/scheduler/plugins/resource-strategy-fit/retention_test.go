@@ -34,25 +34,6 @@ import (
 func TestArguments(t *testing.T) {
 	framework.RegisterPluginBuilder(PluginName, New)
 	defer framework.CleanupPluginBuilders()
-	//actions: "enqueue, allocate, backfill, reclaim, preempt"
-	//tiers:
-	//	- plugins:
-	//	- name: resource-strategy-fit
-	//arguments:
-	//resourceStrategyFitWeight: 10
-	//resources:
-	//	nvidia.com/gpu:
-	//	type: MostAllocated
-	//weight: 2
-	//cpu:
-	//	type: LeastAllocated
-	//weight: 1
-	//	sra.policy: retention
-	//	sra.resources: nvidia.com/gpu
-	//	sra.retention.weight: 10
-	//	sra.retention.nvidia.com/gpu: 1
-	//	sra.proportional.nvidia.com/gpu.cpu: 4
-	//	sra.proportional.nvidia.com/gpu.memory: 8
 
 	arguments := framework.Arguments{
 		"sra.policy":                             "retention",
@@ -108,8 +89,8 @@ func TestNode(t *testing.T) {
 	GPUT4 := v1.ResourceName("nvidia.com/t4")
 	GPUA10 := v1.ResourceName("nvidia.com/a10")
 
-	p1 := util.BuildPod("c1", "p1", "n1", v1.PodPending, api.BuildResourceList("1", "1Gi"), "pg1", make(map[string]string), make(map[string]string))
-	p2 := util.BuildPod("c1", "p2", "n3", v1.PodPending, api.BuildResourceList("1.5", "0Gi"), "pg1", make(map[string]string), make(map[string]string))
+	p1 := util.BuildPod("c1", "p1", "", v1.PodPending, api.BuildResourceList("1", "1Gi"), "pg1", make(map[string]string), make(map[string]string))
+	p2 := util.BuildPod("c1", "p2", "", v1.PodPending, api.BuildResourceList("1.5", "0Gi"), "pg1", make(map[string]string), make(map[string]string))
 	addResource(p2.Spec.Containers[0].Resources.Requests, GPUT4, "2")
 	p3 := util.BuildPod("c1", "p3", "", v1.PodPending, api.BuildResourceList("2", "4Gi"), "pg1", make(map[string]string), make(map[string]string))
 	addResource(p3.Spec.Containers[0].Resources.Requests, GPUA10, "2")
@@ -136,13 +117,12 @@ func TestNode(t *testing.T) {
 	}{
 		{
 			TestCommonStruct: uthelper.TestCommonStruct{
-
-				Name:      "single job",
+				Name:      "case1: single job score result in multi-GPU resource",
 				Plugins:   map[string]framework.PluginBuilder{PluginName: New},
 				PodGroups: []*schedulingv1.PodGroup{pg1},
 				Queues:    []*schedulingv1.Queue{queue1},
 				Pods:      []*v1.Pod{p1, p2, p3, p4},
-				Nodes:     []*v1.Node{n1, n2, n3},
+				Nodes:     []*v1.Node{n1, n2, n3, n4},
 			},
 			arguments: framework.Arguments{
 				"resourceStrategyFitWeight":    0,
@@ -181,12 +161,12 @@ func TestNode(t *testing.T) {
 		},
 		{
 			TestCommonStruct: uthelper.TestCommonStruct{
-				Name:      "single job",
+				Name:      "case2: single job score result in single GPU resource",
 				Plugins:   map[string]framework.PluginBuilder{PluginName: New},
 				PodGroups: []*schedulingv1.PodGroup{pg1},
 				Queues:    []*schedulingv1.Queue{queue1},
 				Pods:      []*v1.Pod{p1, p2, p3, p4},
-				Nodes:     []*v1.Node{n1, n2, n3},
+				Nodes:     []*v1.Node{n1, n2, n3, n4},
 			},
 			arguments: framework.Arguments{
 				"resourceStrategyFitWeight":   0,
@@ -222,6 +202,112 @@ func TestNode(t *testing.T) {
 				},
 			},
 		},
+		{
+			TestCommonStruct: uthelper.TestCommonStruct{
+				Name:      "single job score result with retention policy and resourceStrategyFit",
+				Plugins:   map[string]framework.PluginBuilder{PluginName: New},
+				PodGroups: []*schedulingv1.PodGroup{pg1},
+				Queues:    []*schedulingv1.Queue{queue1},
+				Pods:      []*v1.Pod{p1, p2, p3, p4},
+				Nodes:     []*v1.Node{n1, n2, n3, n4},
+			},
+			arguments: framework.Arguments{
+				"resourceStrategyFitWeight": 8,
+				"resources": map[string]interface{}{
+					"nvidia.com/t4": map[string]interface{}{
+						"type":   "MostAllocated",
+						"weight": 3,
+					},
+					"cpu": map[string]interface{}{
+						"type":   "LeastAllocated",
+						"weight": 1,
+					},
+				},
+				"sra.policy":                  "retention",
+				"sra.resources":               "nvidia.com/t4",
+				"sra.retention.weight":        0,
+				"sra.retention.nvidia.com/t4": 2,
+			},
+			expected: map[string]map[string]float64{
+				"c1/p1": {
+					"n1": 775,
+					"n2": 700,
+					"n3": 700,
+					"n4": 700,
+				},
+				"c1/p2": {
+					"n1": 190.625,
+					"n2": 237.5,
+					"n3": 162.5,
+					"n4": 312.5,
+				},
+				"c1/p3": {
+					"n1": 750,
+					"n2": 600,
+					"n3": 600,
+					"n4": 600,
+				},
+				"c1/p4": {
+					"n1": 181.25,
+					"n2": 162.5,
+					"n3": 125,
+					"n4": 200,
+				},
+			},
+		},
+		{
+			TestCommonStruct: uthelper.TestCommonStruct{
+				Name:      "single job score result with retention policy and resourceStrategyFit",
+				Plugins:   map[string]framework.PluginBuilder{PluginName: New},
+				PodGroups: []*schedulingv1.PodGroup{pg1},
+				Queues:    []*schedulingv1.Queue{queue1},
+				Pods:      []*v1.Pod{p1, p2, p3, p4},
+				Nodes:     []*v1.Node{n1, n2, n3, n4},
+			},
+			arguments: framework.Arguments{
+				"resourceStrategyFitWeight": 8,
+				"resources": map[string]interface{}{
+					"nvidia.com/t4": map[string]interface{}{
+						"type":   "MostAllocated",
+						"weight": 3,
+					},
+					"cpu": map[string]interface{}{
+						"type":   "LeastAllocated",
+						"weight": 1,
+					},
+				},
+				"sra.policy":                  "retention",
+				"sra.resources":               "nvidia.com/t4",
+				"sra.retention.weight":        5,
+				"sra.retention.nvidia.com/t4": 2,
+			},
+			expected: map[string]map[string]float64{
+				"c1/p1": {
+					"n1": 1275,
+					"n2": 700,
+					"n3": 1200,
+					"n4": 700,
+				},
+				"c1/p2": {
+					"n1": 190.625,
+					"n2": 237.5,
+					"n3": 162.5,
+					"n4": 312.5,
+				},
+				"c1/p3": {
+					"n1": 750,
+					"n2": 600,
+					"n3": 1100,
+					"n4": 600,
+				},
+				"c1/p4": {
+					"n1": 181.25,
+					"n2": 162.5,
+					"n3": 125,
+					"n4": 200,
+				},
+			},
+		},
 	}
 
 	trueValue := true
@@ -244,11 +330,11 @@ func TestNode(t *testing.T) {
 				for _, node := range ssn.Nodes {
 					score, err := ssn.NodeOrderFn(task, node)
 					if err != nil {
-						t.Errorf("case%d: task %s on node %s has err %v", i, taskID, node.Name, err)
+						t.Errorf("case%d: task %s on node %s has err %v", i+1, taskID, node.Name, err)
 						continue
 					}
 					if expectScore := test.expected[taskID][node.Name]; math.Abs(expectScore-score) > eps {
-						t.Errorf("case%d: task %s on node %s expect have score %v, but get %v", i, taskID, node.Name, expectScore, score)
+						t.Errorf("case%d: task %s on node %s expect have score %v, but get %v", i+1, taskID, node.Name, expectScore, score)
 					}
 				}
 			}
